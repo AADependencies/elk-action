@@ -1,0 +1,67 @@
+name: ELK Action
+description: Captures action data and send it to ELK
+
+inputs: 
+  action_name:
+    description: 'Name of action calling ELK'
+    required: true
+  start_time:
+    description: 'Time calling action started'
+    required: false
+  elk_endpoint:
+    description: 'Endpoint for ELK micro service'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+  - name: Set Context Output
+    id: set-context
+    env:
+      GITHUB_CONTEXT: ${{ toJSON(github) }}
+      RUNNER_CONTEXT: ${{ toJSON(runner) }}
+    run: |
+      echo ::set-output name=github-context::$GITHUB_CONTEXT
+      echo ::set-output name=runner-context::$RUNNER_CONTEXT
+      echo ::set-output name=end-time::$(date +'%Y-%m-%dT%H:%M:%S-0700')
+    shell: bash
+
+  - name: Parse Context
+    id: parse-context
+    env:
+      GITHUB_CONTEXT: ${{ steps.set-context.outputs.github-context}}
+      RUNNER_CONTEXT: ${{ steps.set-context.outputs.runner-context}}
+    run: |
+      echo ::set-output name=github-data::$( jq 'with_entries(select(.key==("ref", "sha", "repository", "run_id", "actor", "event_name")))' <<< "${GITHUB_CONTEXT}" )
+      echo ::set-output name=os::$( jq '."os"' <<< "${RUNNER_CONTEXT}" )
+    shell: bash
+
+  - name: Add Data Fields
+    id: final-data
+    env:
+      PARSED_CONTEXT: ${{steps.parse-context.outputs.github-data}}
+    run: |
+      echo ::set-output name=elk-data::$( jq '. +={"action_name":"${{inputs.action_name}}", "start_time":"${{inputs.start_time}}", "end_time":"${{steps.set-context.outputs.end-time}}", "runner_os":${{steps.parse-context.outputs.os}}}' <<< "${PARSED_CONTEXT}" )
+    shell: bash
+
+  - name: Print Data
+    env:
+      ELK_DATA: ${{steps.final-data.outputs.elk-data}}
+    run: |
+      echo $ELK_DATA
+    shell: bash
+
+  - name: Sending Data to ELK
+    env:
+      ELK_DATA: ${{steps.final-data.outputs.elk-data}}
+    run: |  
+      indexname="action_data"
+      echo -e "Initiating curl command with below data \n$ELK_DATA\n"
+      curl --request POST \
+      --url "https://${{inputs.elk_endpoint}}/index?IndexName=$indexname" \
+      --header "Authorization: Bearer ${{ github.token }}" \
+      --header "Content-Type: application/json" \
+      --data "$ELK_DATA" 
+    shell: bash
+
+
