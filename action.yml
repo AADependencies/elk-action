@@ -32,7 +32,7 @@ runs:
       GITHUB_CONTEXT: ${{ steps.set-context.outputs.github-context}}
       RUNNER_CONTEXT: ${{ steps.set-context.outputs.runner-context}}
     run: |
-      echo ::set-output name=github-data::$( jq 'with_entries(select(.key==("ref", "sha", "repository", "run_id", "actor", "event_name")))' <<< "${GITHUB_CONTEXT}" )
+      echo ::set-output name=github-data::$( jq 'with_entries(select(.key==("job", "ref", "sha", "repository", "repository_owner", "repositoryUrl", "run_id", "run_number", "retention_days", "run_attempt", "actor", "workflow", "head_ref", "base_ref", "event_name")))' <<< "${GITHUB_CONTEXT}" )
       echo ::set-output name=os::$( jq '."os"' <<< "${RUNNER_CONTEXT}" )
     shell: bash
 
